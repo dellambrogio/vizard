@@ -1,0 +1,44 @@
+# Workspace root: no package. The members are the vizard library and one package per project.
+[project]
+name = "vizard-framework"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["vizard", "vizard-mnist", "vizard-cifar10", "vizard-cartpole"]
+
+[dependency-groups]
+dev = ["pyrefly", "pytest", "ruff"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["ml/vizard", "projects/mnist", "projects/cifar10", "projects/cartpole"]
+
+[tool.uv.sources]
+vizard = { workspace = true }
+vizard-mnist = { workspace = true }
+vizard-cifar10 = { workspace = true }
+vizard-cartpole = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ANN", "RUF"]
+
+[tool.ruff.lint.isort]
+# ml/ is not a package root for ruff: name the first-party packages
+known-first-party = ["vizard", "projects"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyrefly]
+project-includes = ["**/*.py"]
+project-excludes = [".venv/**", ".data/**"]
+python-interpreter-path = ".venv/bin/python"
+
+[tool.pytest.ini_options]
+# importlib mode: tests/ folders need no __init__.py, and same-name test files do not collide
+addopts = ["--import-mode=importlib"]

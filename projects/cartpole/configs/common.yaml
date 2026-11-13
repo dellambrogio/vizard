@@ -1,0 +1,110 @@
+# CartPole config values common to all experiments: all values but the experiment name and the
+# model. Each experiment file (baseline_1.0.yaml) starts from this file.
+# Schema: projects/cartpole/config.py, ml/vizard/config.py
+# A node with _target_ is built with Hydra instantiate: _target_ is the class or function, the
+# other keys are its arguments.
+defaults:
+  - train_schema
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+env_id: CartPole-v1  # Gymnasium environment
+
+# All hyperparameters. The nodes below read them with ${hparams.<name>}.
+# One epoch: rollouts_per_epoch rollouts of num_envs * steps_per_rollout environment steps.
+hparams:
+  epochs: 15
+  batch_size: 256         # PPO minibatch size
+  lr: 1e-3
+  lr_interval: epoch    # when the LR scheduler steps: epoch, or step (each optimizer step)
+  clip_grad_norm: null  # clip the gradient norm to this value; null: no clip
+  grad_accum_steps: 1   # add the gradients of N batches before each optimizer step
+  ema_decay: null       # EMA of the weights (for example 0.999), for evaluation and export
+  ema_warmup_steps: 0   # train steps before the first EMA update
+  num_envs: 8             # environments that run in parallel
+  steps_per_rollout: 128  # steps of each environment in one rollout
+  rollouts_per_epoch: 10  # rollouts in one training epoch
+  ppo_epochs: 4           # passes over each rollout
+  gamma: 0.99             # discount factor
+  gae_lambda: 0.95        # GAE lambda
+  clip: 0.2               # PPO ratio clip
+  value_coef: 0.5         # weight of the value loss
+  entropy_coef: 0.01      # weight of the entropy bonus
+
+unit:
+  _target_: projects.cartpole.unit.CartPoleUnit  # the training code adds the device argument
+  # module: the model. Each experiment file sets it.
+  optimizer:
+    _target_: torch.optim.Adam
+    _partial_: true  # the unit adds the model parameters
+    lr: ${hparams.lr}
+  # The LR scheduler; null keeps the LR constant. It counts in hparams.lr_interval units.
+  # Example: linear warmup for 1 epoch, then cosine decay until the last epoch:
+  #   lr_scheduler:
+  #     _target_: vizard.optim.schedulers.warmup_cosine
+  #     _partial_: true  # the unit adds the optimizer
+  #     warmup: 1
+  #     total: ${hparams.epochs}
+  lr_scheduler: null
+  clip: ${hparams.clip}
+  value_coef: ${hparams.value_coef}
+  entropy_coef: ${hparams.entropy_coef}
+
+data:
+  train:  # rollouts of the current policy; run_training gives it the model (bind)
+    _target_: projects.cartpole.data.rollouts.RolloutLoader
+    env_id: ${env_id}
+    num_envs: ${hparams.num_envs}
+    steps_per_rollout: ${hparams.steps_per_rollout}
+    rollouts_per_epoch: ${hparams.rollouts_per_epoch}
+    ppo_epochs: ${hparams.ppo_epochs}
+    batch_size: ${hparams.batch_size}
+    gamma: ${hparams.gamma}
+    gae_lambda: ${hparams.gae_lambda}
+    seed: 0
+
+# All of the evaluation: the metrics (the class), the data and the interval.
+evaluator:
+  _target_: projects.cartpole.evaluator.CartPoleEvaluator
+  env_id: ${env_id}
+  solved_return: 500     # an episode with this return is a success (the CartPole-v1 time limit)
+  every_n_steps: null    # evaluate at the end of each epoch only
+  loader:  # each evaluation plays one greedy episode per seed
+    _target_: projects.cartpole.data.episodes.get_seed_loader
+    first_seed: 10000    # not the seeds of the train environments
+    episodes: 20
+    batch_size: 20
+
+exporter:
+  _target_: projects.cartpole.export.onnx.CartPoleExporter
+  obs_dim: ${unit.module.cfg.obs_dim}
+
+trainer:
+  checkpoint: true  # save a checkpoint after each epoch
+  # Also save a checkpoint each N train steps; null: after each epoch only. A resume from the
+  # middle of an epoch starts the data of that epoch again from the start.
+  checkpoint_every_n_steps: null
+  keep_last_n: 3        # number of checkpoints to keep
+  precision: null       # mixed precision: bf16, fp16, or null for float32
+  seed: 0               # seed of torch, numpy and random
+  deterministic: false  # error on PyTorch operations that are not deterministic (slower)
+  compile: false        # torch.compile the model for training
+  compile_mode: null    # torch.compile mode: null, reduce-overhead or max-autotune
+  export_onnx: false    # after training, export the model: .jobs/<job id>/export/model.onnx
+
+wandb:
+  enabled: true          # track the run in Weights & Biases
+  project: vizard-cartpole
+  entity: foobar     # W&B team; null is the default entity of the account
+  mode: online           # offline: write the run to .jobs/<job id>/wandb/ only
+  log_every_n_steps: 50  # log the train loss each N steps; 0 logs per epoch only
+
+resume: null     # job id to continue, for example W482915
+init_from: null  # local job id to start from: a new job with its weights (EMA weights if any)
+
+# No Hydra output folders: run artifacts go to .jobs/<job id>/
+hydra:
+  output_subdir: null
+  run:
+    dir: .

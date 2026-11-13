@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vizard-cartpole"
+version = "0.1.0"
+description = "CartPole balance with PPO (reinforcement learning), trained with vizard"
+requires-python = ">=3.12"
+dependencies = [
+    "vizard",
+    "click",
+    "gymnasium",
+    "hydra-core",
+    "loguru",
+    "numpy",
+    "omegaconf",
+    "torch",
+    "torchtnt",
+]
+
+[tool.uv.sources]
+vizard = { workspace = true }
+
+# The package is projects.cartpole (namespace packages, no __init__.py): the wheel puts the
+# files of this folder under projects/cartpole/, and the editable install puts the repo root on
+# sys.path.
+[tool.hatch.build.targets.wheel]
+include = ["**/*.py", "**/*.yaml"]
+exclude = ["tests/**"]
+sources = { "" = "projects/cartpole/" }
+
+[tool.hatch.build]
+dev-mode-dirs = ["../.."]

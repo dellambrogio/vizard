@@ -1,0 +1,17 @@
+# CartPole experiment baseline_1.0: PPO with an actor-critic MLP (2 hidden layers of 64).
+# All other values come from common.yaml.
+defaults:
+  - common
+  - _self_
+
+experiment: baseline_1.0  # name of the experiment: in the job name and the W&B group
+
+unit:
+  module:
+    _target_: projects.cartpole.models.actor_critic.ActorCritic
+    cfg:
+      _target_: projects.cartpole.models.actor_critic.ActorCriticConfig
+      obs_dim: 4      # size of the CartPole observation
+      num_actions: 2  # push the cart left or right
+      hidden: 64      # units of each hidden layer
+      layers: 2       # hidden layers, in the policy and in the value network

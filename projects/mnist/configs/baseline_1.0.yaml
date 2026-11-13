@@ -1,0 +1,16 @@
+# MNIST experiment baseline_1.0: small CNN (2 conv layers, 2 linear layers).
+# All other values come from common.yaml.
+defaults:
+  - common
+  - _self_
+
+experiment: baseline_1.0  # name of the experiment: in the job name and the W&B group
+
+unit:
+  module:
+    _target_: projects.mnist.models.cnn.Net
+    cfg:
+      _target_: projects.mnist.models.cnn.NetConfig
+      conv1_channels: 32  # output channels of the first conv layer
+      conv2_channels: 64  # output channels of the second conv layer
+      hidden: 128         # units of the hidden linear layer

@@ -1,0 +1,94 @@
+# CIFAR-10 config values common to all experiments: all values but the experiment name and the
+# model. Each experiment file (baseline_1.0.yaml) starts from this file.
+# Schema: projects/cifar10/config.py, ml/vizard/config.py
+# A node with _target_ is built with Hydra instantiate: _target_ is the class or function, the
+# other keys are its arguments.
+defaults:
+  - train_schema
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+# The training hyperparameters. The nodes below read them with ${hparams.<name>}.
+hparams:
+  epochs: 10
+  batch_size: 128       # full batch of one optimizer step, for any number of GPUs
+  lr: 1e-3
+  lr_interval: epoch    # when the LR scheduler steps: epoch, or step (each optimizer step)
+  clip_grad_norm: null  # clip the gradient norm to this value; null: no clip
+  grad_accum_steps: 1   # add the gradients of N batches before each optimizer step
+  ema_decay: null       # EMA of the weights (for example 0.999), for evaluation and export
+  ema_warmup_steps: 0   # train steps before the first EMA update
+  weight_decay: 5e-4    # AdamW weight decay
+  label_smoothing: 0.0  # cross-entropy label smoothing, in [0, 1)
+  augment: true         # random crop and horizontal flip on the train images
+
+unit:
+  _target_: projects.cifar10.unit.Cifar10Unit  # the training code adds the device argument
+  # module: the model. Each experiment file sets it.
+  loss_fn:
+    _target_: torch.nn.functional.cross_entropy
+    _partial_: true  # the unit calls it with the logits and the labels
+    label_smoothing: ${hparams.label_smoothing}
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true  # the unit adds the model parameters
+    lr: ${hparams.lr}
+    weight_decay: ${hparams.weight_decay}
+  # The LR scheduler; null keeps the LR constant. It counts in hparams.lr_interval units.
+  # Example: linear warmup for 1 epoch, then cosine decay until the last epoch:
+  #   lr_scheduler:
+  #     _target_: vizard.optim.schedulers.warmup_cosine
+  #     _partial_: true  # the unit adds the optimizer
+  #     warmup: 1
+  #     total: ${hparams.epochs}
+  lr_scheduler: null
+
+data:
+  train:
+    _target_: projects.cifar10.data.loaders.get_loader
+    split: train
+    batch_size: ${per_rank:${hparams.batch_size}}  # the batch of one DDP process
+    shuffle: true
+    augment: ${hparams.augment}
+
+# All of the evaluation: the metrics (the class), the data and the interval.
+evaluator:
+  _target_: projects.cifar10.evaluator.Cifar10Evaluator
+  every_n_steps: null  # also evaluate each N train steps; null: at the end of each epoch only
+  loader:  # each evaluation uses this set in full
+    _target_: projects.cifar10.data.loaders.get_loader
+    split: test
+    batch_size: 1000
+
+exporter:
+  _target_: projects.cifar10.export.onnx.Cifar10Exporter
+
+trainer:
+  checkpoint: true  # save a checkpoint after each epoch
+  # Also save a checkpoint each N train steps; null: after each epoch only. A resume from the
+  # middle of an epoch starts the data of that epoch again from the start.
+  checkpoint_every_n_steps: null
+  keep_last_n: 3        # number of checkpoints to keep
+  precision: null       # mixed precision: bf16, fp16, or null for float32
+  seed: 0               # seed of torch, numpy and random
+  deterministic: false  # error on PyTorch operations that are not deterministic (slower)
+  compile: false        # torch.compile the model for training
+  compile_mode: null    # torch.compile mode: null, reduce-overhead or max-autotune
+  export_onnx: false    # after training, export the model: .jobs/<job id>/export/model.onnx
+
+wandb:
+  enabled: true          # track the run in Weights & Biases
+  project: vizard-cifar10
+  entity: foobar         # W&B team; null is the default entity of the account
+  mode: online           # offline: write the run to .jobs/<job id>/wandb/ only
+  log_every_n_steps: 50  # log the train loss each N steps; 0 logs per epoch only
+
+resume: null     # job id to continue, for example W482915
+init_from: null  # local job id to start from: a new job with its weights (EMA weights if any)
+
+# No Hydra output folders: run artifacts go to .jobs/<job id>/
+hydra:
+  output_subdir: null
+  run:
+    dir: .

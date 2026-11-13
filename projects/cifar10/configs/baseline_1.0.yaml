@@ -1,0 +1,16 @@
+# CIFAR-10 experiment baseline_1.0: VGG-style CNN with batch norm (3 stages, 2 conv layers each).
+# All other values come from common.yaml.
+defaults:
+  - common
+  - _self_
+
+experiment: baseline_1.0  # name of the experiment: in the job name and the W&B group
+
+unit:
+  module:
+    _target_: projects.cifar10.models.convnet.ConvNet
+    cfg:
+      _target_: projects.cifar10.models.convnet.ConvNetConfig
+      width: 64           # channels of the first stage; the stages have 1x, 2x and 4x width
+      convs_per_stage: 2  # 3x3 conv layers in each of the three stages
+      dropout: 0.2        # before the last linear layer

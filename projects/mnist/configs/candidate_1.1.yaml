@@ -1,0 +1,16 @@
+# MNIST experiment candidate_1.1: residual CNN with batch norm, global average pooling and dropout.
+# All other values come from common.yaml. Change from baseline_1.0: the model only.
+defaults:
+  - common
+  - _self_
+
+experiment: candidate_1.1  # name of the experiment: in the job name and the W&B group
+
+unit:
+  module:
+    _target_: projects.mnist.models.resnet.ResNet
+    cfg:
+      _target_: projects.mnist.models.resnet.ResNetConfig
+      width: 32            # channels of the first stage; the stages have 1x, 2x and 4x width
+      blocks_per_stage: 1  # residual blocks in each of the three stages
+      dropout: 0.1         # before the last linear layer
